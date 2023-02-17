@@ -36,6 +36,9 @@ class Mail(Action):
     receiver_mail = models.EmailField()
     sender_mail = models.EmailField()
 
+    # class Meta:
+    #     unique_together = ['name', 'subject', 'description', 'attachment', 'sender_mail', 'receiver_mail', 'schedule_time',]
+
     def __str__(self):
         return self.name
 

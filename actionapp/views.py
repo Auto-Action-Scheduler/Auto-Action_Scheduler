@@ -1,4 +1,7 @@
+from django.core.mail import send_mail
 from django.shortcuts import render
+from django.utils import timezone
+from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPIView)
@@ -9,7 +12,6 @@ from rest_framework.response import Response
 from .serializers import MailSerializer, MessageSerializer, ReminderSerializer
 from .models import Mail, Message, Reminder
 from utils.json_renderer import CustomRenderer
-from .tasks import send_email
 
 
 class MailCreateListAPIView(ListCreateAPIView):
@@ -19,18 +21,19 @@ class MailCreateListAPIView(ListCreateAPIView):
     renderer_classes = (CustomRenderer,)
 
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            # print(serializer.data)
-            # sender = serializer.data.get('sender_mail')
-            # receiver = serializer.data.get('receiver_mail')
-            # html_content = serializer.data.get('description')
-            # subject = serializer.data.get('subject')
-            # send_email(from_email='labisoye@afexnigeria.com', to_emails='yoyedele@afexnigeria.com', subject='Mail Subject', html_content='Mail Body')
-            print('Got here')
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                data = serializer.save()
+                if data.schedule_time <= timezone.now():
+                    send_mail(from_email=data.sender_mail, subject=data.subject, message=data.description,
+                              recipient_list=[data.receiver_mail])
+                    data.is_executed = True
+                    data.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(e)
 
 
 class MailRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):

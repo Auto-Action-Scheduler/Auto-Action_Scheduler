@@ -1,17 +1,37 @@
-from decouple import config
+from django.core.mail import send_mail
 from django.utils.baseconv import base64
+from django.utils import timezone
+
+from decouple import config
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, FileType, Disposition)
-from django.core.mail import send_mail
 
 from AutoActionScheduler.celery import app
+from .models import Mail
 
 
-@app.task(bind=True, ignore_result=True)
-def send_email(from_email=None, to_emails=None, subject='', html_content=''):
-    send_mail(subject='Mail Subject', message='mail body', from_email='oyedeleyusuff@gmail.com',
-              recipient_list=['yoyedele@afexnigeria.com', ])
-    print('Got here')
+@app.task()
+def every_hour_task():
+    mails = Mail.active_objects.exclude(is_executed=True)
+    now = timezone.now()
+
+    for mail in mails:
+        if mail.schedule_time.date() == now.date() and mail.schedule_time.hour == now.hour:
+            send_email.apply_async((mail.pk,), eta=mail.schedule_time)
+            mail.is_executed = True
+            mail.save()
+            print('Got here')
+
+
+@app.task()
+def send_email(pk):
+    mail = Mail.active_objects.exclude(is_executed=True).filter(id=pk).first()
+    if mail:
+        send_mail(subject=mail.subject, message=mail.description, from_email=mail.sender_mail,
+                  recipient_list=[mail.receiver])
+
+
+
     # message = Mail(
     #     from_email=from_email,
     #     to_emails=to_emails,
@@ -40,5 +60,3 @@ def send_email(from_email=None, to_emails=None, subject='', html_content=''):
     #
     # except Exception as e:
     #     print(str(e))
-
-
