@@ -4,10 +4,10 @@ from django.utils import timezone
 
 from decouple import config
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, FileType, Disposition)
+# from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, FileType, Disposition)
 
 from AutoActionScheduler.celery import app
-from .models import Mail
+from actionapp.models import Mail
 
 
 @app.task()
@@ -17,20 +17,24 @@ def every_hour_task():
 
     for mail in mails:
         if mail.schedule_time.date() == now.date() and mail.schedule_time.hour == now.hour:
-            send_email.apply_async((mail.pk,), eta=mail.schedule_time)
-            mail.is_executed = True
-            mail.save()
-            print('Got here')
+            send_email.apply_async((mail.pk,),
+                                   eta=timezone.datetime(year=mail.schedule_time.year, month=mail.schedule_time.month,
+                                                         day=mail.schedule_time.day,
+                                                         hour=mail.schedule_time.hour,
+                                                         minute=mail.schedule_time.minute,
+                                                         second=mail.schedule_time.second))
+
 
 
 @app.task()
 def send_email(pk):
     mail = Mail.active_objects.exclude(is_executed=True).filter(id=pk).first()
+
     if mail:
         send_mail(subject=mail.subject, message=mail.description, from_email=mail.sender_mail,
-                  recipient_list=[mail.receiver])
-
-
+                  recipient_list=[mail.receiver_mail])
+        mail.is_executed = True
+        mail.save()
 
     # message = Mail(
     #     from_email=from_email,

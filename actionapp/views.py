@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from .serializers import MailSerializer, MessageSerializer, ReminderSerializer
 from .models import Mail, Message, Reminder
 from utils.json_renderer import CustomRenderer
+from .tasks import send_email
 
 
 class MailCreateListAPIView(ListCreateAPIView):
