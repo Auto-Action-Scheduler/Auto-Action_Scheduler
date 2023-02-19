@@ -8,11 +8,12 @@ from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPI
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
 
+from .calendarapi import sync_event
 # Create your views here.
 from .serializers import MailSerializer, MessageSerializer, ReminderSerializer
 from .models import Mail, Message, Reminder
 from utils.json_renderer import CustomRenderer
-from .tasks import send_email
+from .tasks import send_email, send_sms, sms
 
 
 class MailCreateListAPIView(ListCreateAPIView):
@@ -20,6 +21,11 @@ class MailCreateListAPIView(ListCreateAPIView):
     queryset = Mail.active_objects.all()
     parser_classes = (MultiPartParser, JSONParser)
     renderer_classes = (CustomRenderer,)
+
+    def get(self, request, *args, **kwargs):
+        # send_sms(17)
+        sms(17)
+        return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -95,7 +101,8 @@ class ReminderCreateListAPIView(ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            data = serializer.save()
+            sync_event(data)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

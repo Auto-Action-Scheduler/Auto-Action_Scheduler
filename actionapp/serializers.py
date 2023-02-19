@@ -46,7 +46,7 @@ class MessageSerializer(serializers.ModelSerializer):
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reminder
-        fields = ('id', 'email', 'description', 'schedule_time', 'timestamp')
+        fields = ('id', 'name', 'email', 'description', 'schedule_time', 'timestamp')
         extra_kwargs = {
             'timestamp': {'read_only': True}
         }
@@ -54,7 +54,10 @@ class ReminderSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         schedule_time = attrs.get('schedule_time')
 
-        if schedule_time and schedule_time < timezone.now():
+        if not schedule_time:
+            raise serializers.ValidationError("schedule time must be provided")
+
+        if schedule_time and schedule_time <= timezone.now():
             raise serializers.ValidationError("Schedule time must be in future.")
 
         return attrs
