@@ -12,7 +12,7 @@ from googleapiclient.errors import HttpError
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
-def sync_event(event):
+def sync_event(name, description, schedule_time):
     """Shows basic usage of the Google Calendar API.
     Prints the start and name of the next 10 events on the user's calendar.
     """
@@ -38,14 +38,14 @@ def sync_event(event):
     try:
         service = build('calendar', 'v3', credentials=creds)
         event = {
-            'summary': event.name,  # event's title
-            'description': event.description,  # event's description
+            'summary': name,  # event's title
+            'description': description,  # event's description
             'start': {
-                'dateTime': event.schedule_time.isoformat(),
+                'dateTime': schedule_time,
                 'timeZone': 'Africa/Lagos',
             },  # event's start date/time with timezone
             'end': {
-                'dateTime': event.schedule_time.isoformat(),
+                'dateTime': schedule_time,
                 'timeZone': 'Africa/Lagos',
             },  # event's end date/time with timezone
             'reminders': {

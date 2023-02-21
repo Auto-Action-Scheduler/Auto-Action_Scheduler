@@ -1,4 +1,5 @@
 from django.core.mail import send_mail
+from django.db import IntegrityError
 from django.shortcuts import render
 from django.utils import timezone
 from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
@@ -8,12 +9,13 @@ from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPI
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
 
+from utils.outbox import send_sms
 from .calendarapi import sync_event
 # Create your views here.
 from .serializers import MailSerializer, MessageSerializer, ReminderSerializer
 from .models import Mail, Message, Reminder
 from utils.json_renderer import CustomRenderer
-from .tasks import send_email, send_sms, sms
+from .tasks import sync_reminder, run_send_mail
 
 
 class MailCreateListAPIView(ListCreateAPIView):
@@ -22,25 +24,16 @@ class MailCreateListAPIView(ListCreateAPIView):
     parser_classes = (MultiPartParser, JSONParser)
     renderer_classes = (CustomRenderer,)
 
-    def get(self, request, *args, **kwargs):
-        # send_sms(17)
-        sms(17)
-        return super().get(request, *args, **kwargs)
-
     def post(self, request, *args, **kwargs):
-        try:
-            serializer = self.get_serializer(data=request.data)
-            if serializer.is_valid():
-                data = serializer.save()
-                if data.schedule_time <= timezone.now():
-                    send_mail(from_email=data.sender_mail, subject=data.subject, message=data.description,
-                              recipient_list=[data.receiver_mail])
-                    data.is_executed = True
-                    data.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response(e)
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            data = serializer.save()
+            if data.schedule_time <= timezone.now():
+                run_send_mail.delay(data.sender_mail, data.subject, data.description, data.receiver_mail)
+                data.is_executed = True
+                data.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MailRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
@@ -70,7 +63,9 @@ class MessageCreateListAPIView(ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            data = serializer.save()
+            if data.schedule_time <= timezone.now():
+                send_sms(data.pk)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -102,7 +97,7 @@ class ReminderCreateListAPIView(ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             data = serializer.save()
-            sync_event(data)
+            sync_reminder.delay(name=data.name, description=data.description, schedule_time=data.schedule_time)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

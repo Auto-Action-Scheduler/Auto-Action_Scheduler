@@ -9,12 +9,14 @@ from sendgrid import SendGridAPIClient
 # from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, FileType, Disposition)
 
 from AutoActionScheduler.celery import app
+from actionapp.calendarapi import sync_event
 from actionapp.models import Mail, Message
 
 
 @app.task()
 def every_hour_task():
     mails = Mail.active_objects.exclude(is_executed=True)
+    messages = Message.active_objects.exclude(is_executed=True)
     now = timezone.now()
 
     for mail in mails:
@@ -25,6 +27,14 @@ def every_hour_task():
                                                          hour=mail.schedule_time.hour,
                                                          minute=mail.schedule_time.minute,
                                                          second=mail.schedule_time.second))
+    for message in messages:
+        if message.schedule_time.date() == now.date() and message.schedule_time.hour == now.hour:
+            send_sms.apply_async((message.pk,), eta=timezone.datetime(year=message.schedule_time.year,
+                                                                      month=message.schedule_time.month,
+                                                                      day=message.schedule_time.day,
+                                                                      hour=message.schedule_time.hour,
+                                                                      minute=message.schedule_time.minute,
+                                                                      second=message.schedule_time.second))
 
 
 @app.task()
@@ -38,33 +48,12 @@ def send_email(pk):
         mail.save()
 
 
-# @app.task()
+@app.task()
 def send_sms(pk):
     sms = Message.active_objects.exclude(is_executed=True).filter(id=pk).first()
     username = config('SMS_USERNAME')
     api_key = config('SMS_API_KEY')
-    africastalking.initialize(username=username, api_key=api_key)
-
-    sms_message = africastalking.SMS
-
-    if sms:
-        message = sms.description
-        recipient_list = ["+2347063704879", "+2347038521090"]
-        sender = "6370"
-        try:
-            response = sms_message.send(message, recipient_list, sender)
-            print(response)
-            # sms.is_executed = True
-            # sms.save()
-        except Exception as e:
-            print(e)
-
-
-def sms(pk):
-    sms = Message.active_objects.exclude(is_executed=True).filter(id=pk).first()
-    username = config('SMS_USERNAME')
-    api_key = config('SMS_API_KEY')
-    url = "https://api.sandbox.africastalking.com/version1/messaging"
+    url = "https://api.africastalking.com/version1/messaging"
     headers = {
         "apiKey": api_key,
         "Content_Type": "application/x-www-form-urlencoded",
@@ -73,11 +62,27 @@ def sms(pk):
     data = {
         "username": username,
         "message": sms.description,
-        "to": "+2349068974869"
+        "to": sms.phone_number
     }
 
     response = requests.post(url=url, headers=headers, data=data)
-    print(response.text)
+    sms.is_executed = True
+    sms.save()
+
+
+@app.task()
+def sync_reminder(name, description, schedule_time):
+    sync_event(name, description, schedule_time)
+
+
+@app.task()
+def run_send_mail(from_mail, subject, message, recipient_list):
+    send_mail(from_email=from_mail, subject=subject, message=message,
+              recipient_list=[recipient_list])
+
+
+
+
 
     # message = Mail(
     #     from_email=from_email,
@@ -107,6 +112,27 @@ def sms(pk):
     #
     # except Exception as e:
     #     print(str(e))
+
+
+# def send_sms(pk):
+#     sms = Message.active_objects.exclude(is_executed=True).filter(id=pk).first()
+#     username = config('SMS_USERNAME')
+#     api_key = config('SMS_API_KEY')
+#     africastalking.initialize(username=username, api_key=api_key)
+#
+#     sms_message = africastalking.SMS
+#
+#     if sms:
+#         message = sms.description
+#         recipient_list = ["+2347063704879"]
+#         sender = "6370"
+#         try:
+#             response = sms_message.send(message, recipient_list, sender)
+#             print(response)
+#             # sms.is_executed = True
+#             # sms.save()
+#         except Exception as e:
+#             print(e)
 
 
 # Download the helper library from https://www.twilio.com/docs/python/install

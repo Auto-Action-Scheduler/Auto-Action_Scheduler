@@ -17,7 +17,7 @@ class DeleteManager(models.Manager):
 class Action(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField()
-    schedule_time = models.DateTimeField(default=timezone.now())
+    schedule_time = models.DateTimeField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
     is_executed = models.BooleanField(default=False)
@@ -25,6 +25,9 @@ class Action(models.Model):
     objects = models.Manager()
     active_objects = ActiveManager()
     deleted_objects = DeleteManager()
+
+    class Meta:
+        abstract = True
 
     def __str__(self):
         return self.name
@@ -36,8 +39,9 @@ class Mail(Action):
     receiver_mail = models.EmailField()
     sender_mail = models.EmailField()
 
-    # class Meta:
-    #     unique_together = ['name', 'subject', 'description', 'attachment', 'sender_mail', 'receiver_mail', 'schedule_time',]
+    class Meta:
+        unique_together = (
+        'name', 'subject', 'description', 'sender_mail', 'receiver_mail', 'schedule_time')
 
     def __str__(self):
         return self.name
@@ -46,6 +50,9 @@ class Mail(Action):
 class Reminder(Action):
     email = models.EmailField()
 
+    class Meta:
+        unique_together = ('name', 'email', 'description', 'schedule_time')
+
     def __str__(self):
         return self.email
 
@@ -53,6 +60,9 @@ class Reminder(Action):
 class Message(Action):
     phone_number = models.CharField(max_length=50)
     sender = models.CharField(max_length=200)
+
+    class Meta:
+        unique_together = ('name', 'phone_number', 'description', 'sender', 'schedule_time')
 
     def __str__(self):
         return self.name

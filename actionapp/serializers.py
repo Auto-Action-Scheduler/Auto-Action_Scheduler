@@ -12,18 +12,33 @@ class MailSerializer(serializers.ModelSerializer):
             'timestamp': {'read_only': True}
         }
 
-    def validate(self, attrs):
-        schedule_time = attrs.get('schedule_time')
-        attachment = attrs.get('attachment')
+    def validate_schedule_time(self, value):
+        if value and value < timezone.now():
+            raise serializers.ValidationError("Schedule time must be in future.")
+        elif not value:
+            value = timezone.now()
+        return value
+
+    def validate_attachment(self, value):
         size_limit = 1 * 1024 * 1024
 
-        if schedule_time and schedule_time < timezone.now():
-            raise serializers.ValidationError("Schedule time must be in future.")
-
-        if attachment and attachment.size > size_limit:
+        if value and value.size > size_limit:
             raise serializers.ValidationError('Attachment size must not greater than 1MB')
 
-        return attrs
+        return value
+
+    # def validate(self, attrs):
+    #     print(attrs)
+    #     schedule_time = attrs.get("schedule_time")
+    #     attachment = attrs.get("attachment")
+    #     size_limit = 1 * 1024 * 1024
+    #     print(schedule_time)
+    #     print(timezone.now())
+    #
+    #     if schedule_time and schedule_time < timezone.now():
+    #         raise serializers.ValidationError("Schedule time must be in future.")
+    #
+    #     return attrs
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -36,9 +51,15 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         schedule_time = attrs.get('schedule_time')
+        phone_number = attrs.get('phone_number')
+
+        if not phone_number[0] == "+":
+            raise serializers.ValidationError("Phone number format should be like +23470XXXXXX")
 
         if schedule_time and schedule_time < timezone.now():
             raise serializers.ValidationError("Schedule time must be in future.")
+        elif not schedule_time:
+            attrs['schedule_time'] = timezone.now()
 
         return attrs
 
