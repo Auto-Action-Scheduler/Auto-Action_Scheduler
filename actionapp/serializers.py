@@ -4,6 +4,7 @@ from .models import Mail, Message, Reminder
 
 
 class MailSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Mail
         fields = ('id', 'name', 'subject', 'description', 'attachment', 'sender_mail', 'receiver_mail', 'schedule_time',
@@ -13,10 +14,8 @@ class MailSerializer(serializers.ModelSerializer):
         }
 
     def validate_schedule_time(self, value):
-        if value and value < timezone.now():
+        if value and value <= timezone.now():
             raise serializers.ValidationError("Schedule time must be in future.")
-        elif not value:
-            value = timezone.now()
         return value
 
     def validate_attachment(self, value):
@@ -26,19 +25,6 @@ class MailSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Attachment size must not greater than 1MB')
 
         return value
-
-    # def validate(self, attrs):
-    #     print(attrs)
-    #     schedule_time = attrs.get("schedule_time")
-    #     attachment = attrs.get("attachment")
-    #     size_limit = 1 * 1024 * 1024
-    #     print(schedule_time)
-    #     print(timezone.now())
-    #
-    #     if schedule_time and schedule_time < timezone.now():
-    #         raise serializers.ValidationError("Schedule time must be in future.")
-    #
-    #     return attrs
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -56,10 +42,8 @@ class MessageSerializer(serializers.ModelSerializer):
         if not phone_number[0] == "+":
             raise serializers.ValidationError("Phone number format should be like +23470XXXXXX")
 
-        if schedule_time and schedule_time < timezone.now():
+        if schedule_time and schedule_time <= timezone.now():
             raise serializers.ValidationError("Schedule time must be in future.")
-        elif not schedule_time:
-            attrs['schedule_time'] = timezone.now()
 
         return attrs
 
@@ -74,9 +58,6 @@ class ReminderSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         schedule_time = attrs.get('schedule_time')
-
-        if not schedule_time:
-            raise serializers.ValidationError("schedule time must be provided")
 
         if schedule_time and schedule_time <= timezone.now():
             raise serializers.ValidationError("Schedule time must be in future.")

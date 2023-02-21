@@ -1,8 +1,6 @@
 from django.core.mail import send_mail
-from django.db import IntegrityError
 from django.shortcuts import render
 from django.utils import timezone
-from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPIView)
@@ -10,7 +8,6 @@ from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
 
 from utils.outbox import send_sms
-from .calendarapi import sync_event
 # Create your views here.
 from .serializers import MailSerializer, MessageSerializer, ReminderSerializer
 from .models import Mail, Message, Reminder
@@ -28,10 +25,10 @@ class MailCreateListAPIView(ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             data = serializer.save()
-            if data.schedule_time <= timezone.now():
-                run_send_mail.delay(data.sender_mail, data.subject, data.description, data.receiver_mail)
-                data.is_executed = True
-                data.save()
+            # if data.schedule_time <= timezone.now():
+            #     run_send_mail.delay(data.sender_mail, data.subject, data.description, data.receiver_mail)
+            #     data.is_executed = True
+            #     data.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -64,8 +61,8 @@ class MessageCreateListAPIView(ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             data = serializer.save()
-            if data.schedule_time <= timezone.now():
-                send_sms(data.pk)
+            # if data.schedule_time <= timezone.now():
+            #     send_sms(data.pk)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

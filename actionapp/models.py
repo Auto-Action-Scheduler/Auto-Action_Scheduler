@@ -17,7 +17,7 @@ class DeleteManager(models.Manager):
 class Action(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField()
-    schedule_time = models.DateTimeField(null=True, blank=True)
+    schedule_time = models.DateTimeField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
     is_executed = models.BooleanField(default=False)
