@@ -23,7 +23,7 @@ app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 app.conf.beat_schedule = {
     'schedule_task': {
         'task': 'actionapp.tasks.every_hour_task',
-        'schedule': crontab(minute="*/10")
+        'schedule': crontab(minute=0,)
     }
 }
 
