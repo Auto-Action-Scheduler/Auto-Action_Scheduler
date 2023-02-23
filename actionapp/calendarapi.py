@@ -30,7 +30,7 @@ def sync_event(name, description, schedule_time):
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
                 'client_secret.json', SCOPES)
-            flow.redirect_uri = config('HEROKU_URL')
+            flow.redirect_uri = config('GOOGLE_REDIRECT_URL')
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         # with open('token.json', 'a+') as token:
