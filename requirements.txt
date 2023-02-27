@@ -18,6 +18,7 @@ django-celery-beat==2.4.0
 django-heroku==0.3.1
 django-timezone-field==5.0
 djangorestframework==3.14.0
+djangorestframework-simplejwt==5.2.2
 google-api-core==2.11.0
 google-api-python-client==2.78.0
 google-auth==2.16.1
