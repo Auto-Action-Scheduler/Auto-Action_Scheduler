@@ -1,14 +1,17 @@
 from django.utils import timezone
 from rest_framework import serializers
-from .models import Mail, Message, Reminder
+from .models import Action
 
 
-class MailSerializer(serializers.ModelSerializer):
+class ActionSerializer(serializers.ModelSerializer):
+    phone_number = serializers.ListField(child=serializers.CharField(), max_length=50, required=False)
+    receiver_mail = serializers.ListField(child=serializers.EmailField(), required=False)
 
     class Meta:
-        model = Mail
-        fields = ('id', 'name', 'subject', 'description', 'attachment', 'sender_mail', 'receiver_mail', 'schedule_time',
-                  'timestamp')
+        model = Action
+        fields = ('id', 'name', 'subject', 'action_type', 'description', 'attachment', 'receiver_mail',
+                  'schedule_time',
+                  'email', 'phone_number', 'sms_sender', 'timestamp')
         extra_kwargs = {
             'timestamp': {'read_only': True}
         }
@@ -26,40 +29,179 @@ class MailSerializer(serializers.ModelSerializer):
 
         return value
 
-
-class MessageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Message
-        fields = ('id', 'name', 'phone_number', 'description', 'sender', 'schedule_time', 'timestamp')
-        extra_kwargs = {
-            'timestamp': {'read_only': True}
-        }
-
     def validate(self, attrs):
-        schedule_time = attrs.get('schedule_time')
+        action_type = attrs.get('action_type')
+        subject = attrs.get('subject')
+        receiver_mail = attrs.get('receiver_mail')
+        email = attrs.get('email')
         phone_number = attrs.get('phone_number')
-
-        if not phone_number[0] == "+":
-            raise serializers.ValidationError("Phone number format should be like +23470XXXXXX")
-
-        if schedule_time and schedule_time <= timezone.now():
-            raise serializers.ValidationError("Schedule time must be in future.")
-
-        return attrs
-
-
-class ReminderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Reminder
-        fields = ('id', 'name', 'email', 'description', 'schedule_time', 'timestamp')
-        extra_kwargs = {
-            'timestamp': {'read_only': True}
-        }
-
-    def validate(self, attrs):
+        sms_sender = attrs.get('sms_sender')
+        name = attrs.get('name')
+        description = attrs.get('description')
         schedule_time = attrs.get('schedule_time')
+        attachment = attrs.get('attachment')
 
-        if schedule_time and schedule_time <= timezone.now():
-            raise serializers.ValidationError("Schedule time must be in future.")
+        if action_type == "Mail":
+            if not subject:
+                raise serializers.ValidationError('Mail subject must be provided.')
+            if not receiver_mail:
+                raise serializers.ValidationError('Receiver mail must be provided.')
+            if not email:
+                raise serializers.ValidationError('Email must be provided.')
+            if phone_number:
+                raise serializers.ValidationError('Phone number is not needed')
+            if sms_sender:
+                raise serializers.ValidationError('sms sender is not needed')
+        elif action_type == "SMS":
+            if subject:
+                raise serializers.ValidationError('Subject is not needed.')
+            if receiver_mail:
+                raise serializers.ValidationError('Receiver mail is not needed.')
+            if attachment:
+                raise serializers.ValidationError('Attachment is not needed.')
+            if email:
+                raise serializers.ValidationError('Email is not needed.')
+            if not phone_number:
+                raise serializers.ValidationError('Phone number must be provided')
+            if phone_number:
+                for num in phone_number:
+                    if num[0] != "+":
+                        raise serializers.ValidationError('Phone number format should be like +23470XXXXXX')
+            if not sms_sender:
+                raise serializers.ValidationError('sms sender must be provided')
+        elif action_type == "Reminder":
+            if subject:
+                raise serializers.ValidationError('Mail subject is not needed.')
+            if receiver_mail:
+                raise serializers.ValidationError('Receiver mail is not needed.')
+            if attachment:
+                raise serializers.ValidationError('Attachment is not needed.')
+            if not email:
+                raise serializers.ValidationError('Email must be provided.')
+            if phone_number:
+                raise serializers.ValidationError('Phone number is not needed')
+            if sms_sender:
+                raise serializers.ValidationError('sms sender is not needed')
+
+        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
+                                        action_type=action_type,
+                                        subject=subject, receiver_mail=receiver_mail, email=email).exists():
+            raise serializers.ValidationError("Data already exist.")
+
+        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
+                                        action_type=action_type, email=email).exists():
+            raise serializers.ValidationError("Data already exist.")
+
+        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
+                                        action_type=action_type, phone_number=phone_number,
+                                        sms_sender=sms_sender).exists():
+            raise serializers.ValidationError("Data already exist.")
 
         return attrs
+
+    def update(self, instance, validated_data):
+        action_type = validated_data.get('action_type')
+
+        if action_type == "Mail":
+            if instance.action_type == "Reminder" or instance.action_type == "SMS":
+                raise serializers.ValidationError("You can't swap the action type.")
+
+        if action_type == "SMS":
+            if instance.action_type == "Reminder" or instance.action_type == "Mail":
+                raise serializers.ValidationError("You can't swap the action type.")
+
+        if action_type == "Reminder":
+            if instance.action_type == "Mail" or instance.action_type == "SMS":
+                raise serializers.ValidationError("You can't swap the action type.")
+
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        if instance.action_type == "Mail":
+            if not instance.attachment:
+                return {
+                    'id': instance.id,
+                    'name': instance.name,
+                    'action_type': instance.action_type,
+                    'description': instance.description,
+                    'schedule_time': instance.schedule_time,
+                    'timestamp': instance.timestamp,
+                    'subject': instance.subject,
+                    'email': instance.email,
+                    'receiver_mail': instance.receiver_mail
+                }
+            elif instance.attachment:
+                return {
+                    'id': instance.id,
+                    'name': instance.name,
+                    'action_type': instance.action_type,
+                    'description': instance.description,
+                    'schedule_time': instance.schedule_time,
+                    'timestamp': instance.timestamp,
+                    'subject': instance.subject,
+                    'email': instance.email,
+                    'receiver_mail': instance.receiver_mail,
+                    'attachment': instance.attachment.url
+                }
+        elif instance.action_type == "SMS":
+            return {
+                'id': instance.id,
+                'name': instance.name,
+                'action_type': instance.action_type,
+                'description': instance.description,
+                'schedule_time': instance.schedule_time,
+                'timestamp': instance.timestamp,
+                'phone_number': instance.phone_number,
+                'sms_sender': instance.sms_sender
+            }
+        elif instance.action_type == "Reminder":
+            return {
+                'id': instance.id,
+                'name': instance.name,
+                'action_type': instance.action_type,
+                'description': instance.description,
+                'schedule_time': instance.schedule_time,
+                'timestamp': instance.timestamp,
+                'email': instance.email
+            }
+
+
+class CancelActionSerializer(serializers.Serializer):
+    task_id = serializers.UUIDField()
+
+# class MessageSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Message
+#         fields = ('id', 'name', 'phone_number', 'description', 'sender', 'schedule_time', 'timestamp')
+#         extra_kwargs = {
+#             'timestamp': {'read_only': True}
+#         }
+#
+#     def validate(self, attrs):
+#         schedule_time = attrs.get('schedule_time')
+#         phone_number = attrs.get('phone_number')
+#
+#         if not phone_number[0] == "+":
+#             raise serializers.ValidationError("Phone number format should be like +23470XXXXXX")
+#
+#         if schedule_time and schedule_time <= timezone.now():
+#             raise serializers.ValidationError("Schedule time must be in future.")
+#
+#         return attrs
+#
+#
+# class ReminderSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Reminder
+#         fields = ('id', 'name', 'email', 'description', 'schedule_time', 'timestamp')
+#         extra_kwargs = {
+#             'timestamp': {'read_only': True}
+#         }
+#
+#     def validate(self, attrs):
+#         schedule_time = attrs.get('schedule_time')
+#
+#         if schedule_time and schedule_time <= timezone.now():
+#             raise serializers.ValidationError("Schedule time must be in future.")
+#
+#         return attrs

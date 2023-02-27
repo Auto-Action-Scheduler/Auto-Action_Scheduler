@@ -1,3 +1,5 @@
+import json
+
 import africastalking
 import requests
 from django.core.mail import send_mail
@@ -10,14 +12,14 @@ from sendgrid import SendGridAPIClient
 
 from AutoActionScheduler.celery import app
 from actionapp.calendarapi import sync_event
-from actionapp.models import Mail, Message
+from actionapp.models import Action
 
 
 @app.task()
 def every_hour_task():
-    mails = Mail.active_objects.exclude(is_executed=True)
-    messages = Message.active_objects.exclude(is_executed=True)
-    now = timezone.now()
+    mails = Action.active_objects.filter(action_type="Mail").exclude(is_executed=True)
+    messages = Action.active_objects.exclude(is_executed=True)
+    now = timezone.localtime()
 
     for mail in mails:
         if mail.schedule_time.date() == now.date() and mail.schedule_time.hour == now.hour:
@@ -39,18 +41,20 @@ def every_hour_task():
 
 @app.task()
 def send_email(pk):
-    mail = Mail.active_objects.exclude(is_executed=True).filter(id=pk).first()
+    mail = Action.active_objects.filter(action_type="Mail").exclude(is_executed=True).filter(
+        id=pk).first()
 
     if mail:
-        send_mail(subject=mail.subject, message=mail.description, from_email=mail.sender_mail,
-                  recipient_list=[mail.receiver_mail])
+        send_mail(subject=mail.subject, message=mail.description, from_email=mail.email,
+                  recipient_list=mail.receiver_mail)
         mail.is_executed = True
         mail.save()
 
 
 @app.task()
 def send_sms(pk):
-    sms = Message.active_objects.exclude(is_executed=True).filter(id=pk).first()
+    sms = Action.active_objects.filter(action_type='SMS').exclude(is_executed=True).filter(
+        id=pk).first()
     username = config('SMS_USERNAME')
     api_key = config('SMS_API_KEY')
     url = "https://api.africastalking.com/version1/messaging"
@@ -62,7 +66,7 @@ def send_sms(pk):
     data = {
         "username": username,
         "message": sms.description,
-        "to": sms.phone_number
+        "to": ",".join(sms.phone_number)
     }
 
     response = requests.post(url=url, headers=headers, data=data)
@@ -79,10 +83,6 @@ def sync_reminder(name, description, schedule_time):
 def run_send_mail(from_mail, subject, message, recipient_list):
     send_mail(from_email=from_mail, subject=subject, message=message,
               recipient_list=[recipient_list])
-
-
-
-
 
     # message = Mail(
     #     from_email=from_email,

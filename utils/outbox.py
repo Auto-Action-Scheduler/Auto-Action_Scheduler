@@ -1,11 +1,11 @@
 import requests
 from decouple import config
 
-from actionapp.models import Message
+from actionapp.models import Action
 
 
 def send_sms(pk):
-    sms = Message.active_objects.exclude(is_executed=True).filter(id=pk).first()
+    sms = Action.active_objects.filter(action_type='SMS').exclude(is_executed=True, is_scheduled=False).filter(id=pk).first()
     username = config('SMS_USERNAME')
     api_key = config('SMS_API_KEY')
     url = "https://api.africastalking.com/version1/messaging"

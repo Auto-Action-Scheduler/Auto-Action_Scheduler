@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-
+from django.contrib.auth.models import User
 
 # Create your models here.
 
@@ -15,54 +15,64 @@ class DeleteManager(models.Manager):
 
 
 class Action(models.Model):
+    TYPES = (
+        ("Mail", "Mail"),
+        ("SMS", "SMS"),
+        ("Reminder", "Reminder")
+    )
+
     name = models.CharField(max_length=200)
     description = models.TextField()
     schedule_time = models.DateTimeField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
     is_executed = models.BooleanField(default=False)
+    action_type = models.CharField(max_length=150, choices=TYPES)
+    subject = models.CharField(max_length=250, null=True, blank=True)
+    attachment = models.FileField(null=True, blank=True, upload_to="attachment")
+    receiver_mail = models.JSONField(default=list, null=True, blank=True)
+    email = models.EmailField(null=True, blank=True)
+    phone_number = models.JSONField(default=list, null=True, blank=True)
+    sms_sender = models.CharField(max_length=200, null=True, blank=True)
 
     objects = models.Manager()
     active_objects = ActiveManager()
     deleted_objects = DeleteManager()
 
-    class Meta:
-        abstract = True
-
     def __str__(self):
         return self.name
 
 
-class Mail(Action):
-    subject = models.CharField(max_length=250)
-    attachment = models.FileField(null=True, blank=True, upload_to="attachment")
-    receiver_mail = models.EmailField()
-    sender_mail = models.EmailField()
-
-    class Meta:
-        unique_together = (
-        'name', 'subject', 'description', 'sender_mail', 'receiver_mail', 'schedule_time')
-
-    def __str__(self):
-        return self.name
-
-
-class Reminder(Action):
-    email = models.EmailField()
-
-    class Meta:
-        unique_together = ('name', 'email', 'description', 'schedule_time')
-
-    def __str__(self):
-        return self.email
-
-
-class Message(Action):
-    phone_number = models.CharField(max_length=50)
-    sender = models.CharField(max_length=200)
-
-    class Meta:
-        unique_together = ('name', 'phone_number', 'description', 'sender', 'schedule_time')
-
-    def __str__(self):
-        return self.name
+# class Mail(Action):
+#     subject = models.CharField(max_length=250, null=True, blank=True)
+#     attachment = models.FileField(null=True, blank=True, upload_to="attachment")
+#     receiver_mail = models.EmailField(null=True, blank=True)
+#     sender_mail = models.EmailField(null=True, blank=True)
+#
+#     class Meta:
+#         unique_together = (
+#         'name', 'subject', 'description', 'sender_mail', 'receiver_mail', 'schedule_time')
+#
+#     def __str__(self):
+#         return self.name
+#
+#
+# class Reminder(Action):
+#     email = models.EmailField(null=True, blank=True)
+#
+#     class Meta:
+#         unique_together = ('name', 'email', 'description', 'schedule_time')
+#
+#     def __str__(self):
+#         return self.email
+#
+#
+# class Message(Action):
+#     phone_number = models.CharField(max_length=50, null=True, blank=True)
+#     sender = models.CharField(max_length=200, null=True, blank=True)
+#
+#     class Meta:
+#         unique_together = ('name', 'phone_number', 'description', 'sender', 'schedule_time')
+#
+#     def __str__(self):
+#         return self.name
