@@ -83,4 +83,4 @@ __pypackages__/
 venv
 app_core.log
 
-client_secret.json
+#client_secret.json
