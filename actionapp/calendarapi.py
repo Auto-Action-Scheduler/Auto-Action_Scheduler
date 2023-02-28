@@ -29,11 +29,12 @@ def sync_event(name, description, schedule_time):
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+            flow = InstalledAppFlow.from_client_secrets_file(
                 'client_secret.json', SCOPES)
             flow.redirect_uri = config('GOOGLE_REDIRECT_URL')
-            authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
-            # creds = flow.run_local_server(port=0)
+            # authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
+            creds = flow.run_local_server(port=0)
+            # print(authorization_url)
         # Save the credentials for the next run
         # with open('token.json', 'a+') as token:
         #     token.write(creds.to_json())
