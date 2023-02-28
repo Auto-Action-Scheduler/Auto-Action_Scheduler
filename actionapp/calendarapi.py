@@ -34,6 +34,8 @@ def sync_event(name, description, schedule_time):
             flow.redirect_uri = config('GOOGLE_REDIRECT_URL')
             # authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
             creds = flow.run_local_server(port=0)
+            # flow.fetch_token(authorization_response=authorization_url)
+            # creds = flow.credentials
             # print(authorization_url)
         # Save the credentials for the next run
         # with open('token.json', 'a+') as token:
