@@ -190,3 +190,5 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
 }
+
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'

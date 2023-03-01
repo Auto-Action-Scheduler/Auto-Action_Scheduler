@@ -14,7 +14,7 @@ from googleapiclient.errors import HttpError
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
-def sync_event(name, description, schedule_time):
+def sync_event(request, name, description, schedule_time):
     """Shows basic usage of the Google Calendar API.
     Prints the start and name of the next 10 events on the user's calendar.
     """
@@ -22,6 +22,8 @@ def sync_event(name, description, schedule_time):
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
+    state = request.GET.get('state', None)
+
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
@@ -32,10 +34,17 @@ def sync_event(name, description, schedule_time):
             flow = InstalledAppFlow.from_client_secrets_file(
                 'client_secret.json', SCOPES)
             flow.redirect_uri = config('GOOGLE_REDIRECT_URL')
-            # authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
-            creds = flow.run_local_server(port=0)
-            # flow.fetch_token(authorization_response=authorization_url)
-            # creds = flow.credentials
+            authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
+            # creds = flow.run_local_server(port=0)
+            # print(vars(request))
+            authorization_response = "https://autoactionschedulerapp.herokuapp.com/api/action/create-list"
+            print('response', type(authorization_response))
+            # print(request.GET.get('state'))
+            # print(request.GET.get('_google_authlib_state_'))
+            # code = request.GET.get('code')
+            # print(code)
+            flow.fetch_token(authorization_response=authorization_response)
+            creds = flow.credentials
             # print(authorization_url)
         # Save the credentials for the next run
         # with open('token.json', 'a+') as token:

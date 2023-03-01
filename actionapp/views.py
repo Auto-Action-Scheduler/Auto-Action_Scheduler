@@ -12,6 +12,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from AutoActionScheduler.celery import app
 from utils.outbox import send_sms
+from .calendarapi import sync_event
 # Create your views here.
 from .serializers import ActionSerializer, CancelActionSerializer
 from .models import Action
@@ -46,7 +47,8 @@ class ActionCreateListAPIView(ListCreateAPIView):
                     task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
                     return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
-                task = sync_reminder.delay(name=data.name, description=data.description, schedule_time=data.schedule_time)
+                sync_event(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
+                # task = sync_reminder.delay(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
                 return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
