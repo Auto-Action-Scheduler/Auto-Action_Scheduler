@@ -1,10 +1,11 @@
+from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.shortcuts import render
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import ValidationError
-from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView)
+from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView, CreateAPIView)
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,9 +13,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from AutoActionScheduler.celery import app
 from utils.outbox import send_sms
-from .calendarapi import sync_event
+from .calendarapi import sync_event, g_auth_endpoint
 # Create your views here.
-from .serializers import ActionSerializer, CancelActionSerializer
+from .serializers import ActionSerializer, CancelActionSerializer, CreateReminderSerializer, UserSerializer
 from .models import Action
 from utils.json_renderer import CustomRenderer
 from .tasks import sync_reminder, run_send_mail, send_email, send_sms
@@ -47,9 +48,10 @@ class ActionCreateListAPIView(ListCreateAPIView):
                     task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
                     return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
-                sync_event(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
-                # task = sync_reminder.delay(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
-                return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                auth = sync_event()
+                # g_auth_endpoint(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
+                # task = sync_reminder.delay(name=data.name, description=data.description, schedule_time=data.schedule_time)
+                return Response({'data': serializer.data, 'auth_url': auth}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -81,9 +83,10 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
                     task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
                     return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
-                task = sync_reminder.delay(name=data.name, description=data.description,
-                                           schedule_time=data.schedule_time)
-                return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                auth_url = sync_event()
+                # task = sync_reminder.delay(name=data.name, description=data.description,
+                #                            schedule_time=data.schedule_time)
+                return Response({'data': serializer.data, 'auth_url': auth_url}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -100,7 +103,7 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
             raise ValidationError('Question does not exist.')
 
 
-class CancelActionAPIView(UpdateAPIView):
+class CancelActionAPIView(CreateAPIView):
     serializer_class = CancelActionSerializer
     queryset = Action.active_objects.all()
     renderer_classes = (CustomRenderer,)
@@ -116,6 +119,36 @@ class CancelActionAPIView(UpdateAPIView):
             except:
                 raise ValidationError('An error occurred.')
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CreateReminderAPIView(CreateAPIView):
+    serializer_class = CreateReminderSerializer
+    renderer_classes = (CustomRenderer,)
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            auth_url = serializer.data['auth_url']
+            obj_id = serializer.data['obj_id']
+            user_id = serializer.data['user_id']
+            try:
+                data = Action.objects.filter(id=obj_id, created_by_id=user_id).first()
+                print(data)
+                g_auth_endpoint(auth_url=auth_url, name=data.name, description=data.description,
+                                schedule_time=data.schedule_time)
+                return Response({'message': 'Created Successfully'}, status=status.HTTP_200_OK)
+            except Exception as e:
+                print(e)
+                raise ValidationError('An error occurred.')
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserCreateListAPIView(ListCreateAPIView):
+    serializer_class = UserSerializer
+    queryset = User.objects.all()
+    renderer_classes = (CustomRenderer,)
+    permission_classes = (IsAuthenticated,)
 
 # class MessageCreateListAPIView(ListCreateAPIView):
 #     serializer_class = MessageSerializer

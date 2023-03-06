@@ -1,6 +1,19 @@
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 from .models import Action
+
+
+class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    class Meta:
+        model = User
+        fields = ('id', 'first_name', 'last_name', 'email', 'username', 'password')
+
+    def create(self, validated_data):
+        validated_data['password'] = make_password(validated_data.get('password'))
+        return super(UserSerializer, self).create(validated_data)
 
 
 class ActionSerializer(serializers.ModelSerializer):
@@ -9,7 +22,7 @@ class ActionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Action
-        fields = ('id', 'name', 'subject', 'action_type', 'description', 'attachment', 'receiver_mail',
+        fields = ('id', 'name', 'created_by', 'subject', 'action_type', 'description', 'attachment', 'receiver_mail',
                   'schedule_time',
                   'email', 'phone_number', 'sms_sender', 'timestamp')
         extra_kwargs = {
@@ -124,6 +137,7 @@ class ActionSerializer(serializers.ModelSerializer):
                     'name': instance.name,
                     'action_type': instance.action_type,
                     'description': instance.description,
+                    'created_by': instance.created_by.id,
                     'schedule_time': instance.schedule_time,
                     'timestamp': instance.timestamp,
                     'subject': instance.subject,
@@ -136,6 +150,7 @@ class ActionSerializer(serializers.ModelSerializer):
                     'name': instance.name,
                     'action_type': instance.action_type,
                     'description': instance.description,
+                    'cerated_by': instance.created_by.id,
                     'schedule_time': instance.schedule_time,
                     'timestamp': instance.timestamp,
                     'subject': instance.subject,
@@ -149,6 +164,7 @@ class ActionSerializer(serializers.ModelSerializer):
                 'name': instance.name,
                 'action_type': instance.action_type,
                 'description': instance.description,
+                'created_by': instance.created_by.id,
                 'schedule_time': instance.schedule_time,
                 'timestamp': instance.timestamp,
                 'phone_number': instance.phone_number,
@@ -160,6 +176,7 @@ class ActionSerializer(serializers.ModelSerializer):
                 'name': instance.name,
                 'action_type': instance.action_type,
                 'description': instance.description,
+                'created_by': instance.created_by.id,
                 'schedule_time': instance.schedule_time,
                 'timestamp': instance.timestamp,
                 'email': instance.email
@@ -168,6 +185,12 @@ class ActionSerializer(serializers.ModelSerializer):
 
 class CancelActionSerializer(serializers.Serializer):
     task_id = serializers.UUIDField()
+
+
+class CreateReminderSerializer(serializers.Serializer):
+    auth_url = serializers.URLField()
+    user_id = serializers.IntegerField()
+    obj_id = serializers.IntegerField()
 
 # class MessageSerializer(serializers.ModelSerializer):
 #     class Meta:
