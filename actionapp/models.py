@@ -35,6 +35,7 @@ class Action(models.Model):
     phone_number = models.JSONField(default=list, null=True, blank=True)
     sms_sender = models.CharField(max_length=200, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    task_id = models.CharField(max_length=200, null=True, blank=True)
 
     objects = models.Manager()
     active_objects = ActiveManager()

@@ -2,20 +2,20 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.shortcuts import render
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status
-from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import (ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView, CreateAPIView)
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from AutoActionScheduler.celery import app
 from utils.outbox import send_sms
 from .calendarapi import sync_event, g_auth_endpoint
 # Create your views here.
-from .serializers import ActionSerializer, CancelActionSerializer, CreateReminderSerializer, UserSerializer
+from .serializers import (ActionSerializer, CancelActionSerializer, CreateReminderSerializer, UserSerializer,
+                          ActionRetrieveUpdateDestroySerializer)
 from .models import Action
 from utils.json_renderer import CustomRenderer
 from .tasks import sync_reminder, run_send_mail, send_email, send_sms
@@ -27,6 +27,8 @@ class ActionCreateListAPIView(ListCreateAPIView):
     parser_classes = (MultiPartParser, JSONParser)
     renderer_classes = (CustomRenderer,)
     permission_classes = (IsAuthenticated,)
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['action_type']
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -36,59 +38,45 @@ class ActionCreateListAPIView(ListCreateAPIView):
             if data.action_type == "Mail":
                 if data.schedule_time.date() == now.date():
                     task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                    data.task_id = task.id
+                    data.save()
+                    return Response(serializer.data, status=status.HTTP_200_OK)
                 elif data.schedule_time.date() > now.date():
                     task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                    data.task_id = task.id
+                    data.save()
+                    return Response(serializer.data, status=status.HTTP_200_OK)
             elif data.action_type == "SMS":
                 if data.schedule_time.date() == now.date():
                     task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                    data.task_id = task.id
+                    data.save()
+                    return Response(serializer.data, status=status.HTTP_200_OK)
                 elif data.schedule_time.date() > now.date():
                     task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
+                    data.task_id = task.id
+                    data.save()
+                    return Response(serializer.data, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
                 auth = sync_event()
-                # g_auth_endpoint(request, name=data.name, description=data.description, schedule_time=data.schedule_time)
-                # task = sync_reminder.delay(name=data.name, description=data.description, schedule_time=data.schedule_time)
                 return Response({'data': serializer.data, 'auth_url': auth}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
-    serializer_class = ActionSerializer
+    serializer_class = ActionRetrieveUpdateDestroySerializer
     queryset = Action.active_objects.all()
     parser_classes = (MultiPartParser, JSONParser)
     renderer_classes = (CustomRenderer,)
     permission_classes = (IsAuthenticated,)
 
     def put(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data, partial=True)
-        if serializer.is_valid():
-            data = serializer.save()
-            now = timezone.localtime()
-            if data.action_type == "Mail":
-                if data.schedule_time.date() == now.date():
-                    task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
-                elif data.schedule_time.date() > now.date():
-                    task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
-            elif data.action_type == "SMS":
-                if data.schedule_time.date() == now.date():
-                    task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
-                elif data.schedule_time.date() > now.date():
-                    task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    return Response({'data': serializer.data, 'task_id': task.id}, status=status.HTTP_200_OK)
-            elif data.action_type == "Reminder":
-                auth_url = sync_event()
-                # task = sync_reminder.delay(name=data.name, description=data.description,
-                #                            schedule_time=data.schedule_time)
-                return Response({'data': serializer.data, 'auth_url': auth_url}, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        updated_data = super(ActionRetrieveUpdateDestroyAPIView, self).put(request, *args, **kwargs)
+        if updated_data.data['action_type'] == 'Reminder':
+            auth = sync_event()
+            return Response({'data': updated_data.data, 'auth_url': auth})
+        return updated_data
 
     def delete(self, request, *args, **kwargs):
         mail_id = self.kwargs.get('pk')
