@@ -62,43 +62,43 @@ class ActionSerializer(serializers.ModelSerializer):
         if action_type == "Mail":
             if not subject:
                 raise serializers.ValidationError('Mail subject must be provided.')
-            if not receiver_mail:
+            elif not receiver_mail:
                 raise serializers.ValidationError('Receiver mail must be provided.')
-            if not email:
+            elif not email:
                 raise serializers.ValidationError('Email must be provided.')
-            if phone_number:
+            elif phone_number:
                 raise serializers.ValidationError('Phone number is not needed')
-            if sms_sender:
+            elif sms_sender:
                 raise serializers.ValidationError('sms sender is not needed')
         elif action_type == "SMS":
             if subject:
                 raise serializers.ValidationError('Subject is not needed.')
-            if receiver_mail:
+            elif receiver_mail:
                 raise serializers.ValidationError('Receiver mail is not needed.')
-            if attachment:
+            elif attachment:
                 raise serializers.ValidationError('Attachment is not needed.')
-            if email:
+            elif email:
                 raise serializers.ValidationError('Email is not needed.')
-            if not phone_number:
+            elif not phone_number:
                 raise serializers.ValidationError('Phone number must be provided')
-            if phone_number:
+            elif phone_number:
                 for num in phone_number:
                     if num[0] != "+":
                         raise serializers.ValidationError('Phone number format should be like +23470XXXXXX')
-            if not sms_sender:
+            elif not sms_sender:
                 raise serializers.ValidationError('sms sender must be provided')
         elif action_type == "Reminder":
             if subject:
                 raise serializers.ValidationError('Mail subject is not needed.')
-            if receiver_mail:
+            elif receiver_mail:
                 raise serializers.ValidationError('Receiver mail is not needed.')
-            if attachment:
+            elif attachment:
                 raise serializers.ValidationError('Attachment is not needed.')
-            if not email:
+            elif not email:
                 raise serializers.ValidationError('Email must be provided.')
-            if phone_number:
+            elif phone_number:
                 raise serializers.ValidationError('Phone number is not needed')
-            if sms_sender:
+            elif sms_sender:
                 raise serializers.ValidationError('sms sender is not needed')
 
         if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
@@ -209,62 +209,59 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
         email = validated_data.get('email')
         phone_number = validated_data.get('phone_number')
         sms_sender = validated_data.get('sms_sender')
-        name = validated_data.get('name')
-        description = validated_data.get('description')
-        schedule_time = validated_data.get('schedule_time')
         attachment = validated_data.get('attachment')
         size_limit = 1 * 1024 * 1024
 
         if action_type == "Mail":
             if instance.action_type == "Reminder" or instance.action_type == "SMS":
                 raise serializers.ValidationError("You can't swap the action type.")
-            if not subject:
+            elif not subject:
                 raise serializers.ValidationError('Mail subject must be provided.')
-            if not receiver_mail:
+            elif not receiver_mail:
                 raise serializers.ValidationError('Receiver mail must be provided.')
-            if not email:
+            elif not email:
                 raise serializers.ValidationError('Email must be provided.')
-            if phone_number:
+            elif phone_number:
                 raise serializers.ValidationError('Phone number is not needed')
-            if sms_sender:
+            elif sms_sender:
                 raise serializers.ValidationError('sms sender is not needed')
-            if attachment and attachment.size > size_limit:
+            elif attachment and attachment.size > size_limit:
                 raise serializers.ValidationError('Attachment size must not greater than 1MB')
 
         if action_type == "SMS":
             if instance.action_type == "Reminder" or instance.action_type == "Mail":
                 raise serializers.ValidationError("You can't swap the action type.")
-            if subject:
+            elif subject:
                 raise serializers.ValidationError('Subject is not needed.')
-            if receiver_mail:
+            elif receiver_mail:
                 raise serializers.ValidationError('Receiver mail is not needed.')
-            if attachment:
+            elif attachment:
                 raise serializers.ValidationError('Attachment is not needed.')
-            if email:
+            elif email:
                 raise serializers.ValidationError('Email is not needed.')
-            if not phone_number:
+            elif not phone_number:
                 raise serializers.ValidationError('Phone number must be provided')
-            if phone_number:
+            elif phone_number:
                 for num in phone_number:
                     if num[0] != "+":
                         raise serializers.ValidationError('Phone number format should be like +23470XXXXXX')
-            if not sms_sender:
+            elif not sms_sender:
                 raise serializers.ValidationError('sms sender must be provided')
 
         if action_type == "Reminder":
             if instance.action_type == "Mail" or instance.action_type == "SMS":
                 raise serializers.ValidationError("You can't swap the action type.")
-            if subject:
+            elif subject:
                 raise serializers.ValidationError('Mail subject is not needed.')
-            if receiver_mail:
+            elif receiver_mail:
                 raise serializers.ValidationError('Receiver mail is not needed.')
-            if attachment:
+            elif attachment:
                 raise serializers.ValidationError('Attachment is not needed.')
-            if not email:
+            elif not email:
                 raise serializers.ValidationError('Email must be provided.')
-            if phone_number:
+            elif phone_number:
                 raise serializers.ValidationError('Phone number is not needed')
-            if sms_sender:
+            elif sms_sender:
                 raise serializers.ValidationError('sms sender is not needed')
 
         update = super().update(instance, validated_data)

@@ -45,7 +45,7 @@ class ActionTests(APITestCase):
                                                'description': 'Mail Testing',
                                                'email': 'oyedeleyusuff@gmail.com',
                                                'receiver_mail': ['yoyedele@afexnigeria.com'],
-                                               'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                               'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                                'created_by': self.get_user()['user_id']}, format='json')
         # print(response.data['data']['id'])
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -66,19 +66,19 @@ class ActionTests(APITestCase):
                                                'description': 'SMS Testing',
                                                'sms_sender': 'Goodie',
                                                'phone_number': ['+2347063704879'],
-                                               'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                               'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                                'created_by': self.get_user()['user_id']}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertContains(response, 'phone_number')
 
-    def test_create_reminder(self):
+    def test_reminder_authorization(self):
         url = reverse('create-list')
 
         response = self.client.post(url, data={'name': 'Testing', 'action_type': 'Reminder',
                                                'description': 'Reminder Testing',
                                                'email': 'oyedeleyusuff@gmail.com',
-                                               'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                               'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                                'created_by': self.get_user()['user_id']}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -89,14 +89,14 @@ class ActionTests(APITestCase):
         create_mail = self.create_mail(name='Test', action_type='Mail', subject='Update Mail Subject',
                                        description='Update Mail Description', email='yoyedele@afexnigeria.com',
                                        receiver_mail=['oyedeleyusuff@gmail.com'],
-                                       schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                       schedule_time='2023-03-08T18:55:29.118928+01:00',
                                        created_by=user['user'])
         url = reverse('retrieve-update-destroy', args=[create_mail.id])
         response = self.client.put(url, data={'name': 'Testing', 'action_type': 'Mail', 'subject': 'Mail Subject',
                                               'description': 'Mail Testing',
                                               'email': 'oyedeleyusuff@gmail.com',
                                               'receiver_mail': ['yoyedele@afexnigeria.com'],
-                                              'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                              'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                               'created_by': user['user_id']}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertContains(response, 'subject')
@@ -105,14 +105,14 @@ class ActionTests(APITestCase):
         user = self.get_user()
 
         create_sms = self.create_sms(name='Test SMS', action_type='SMS', description='sms body',
-                                     created_by=user['user'], schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                     created_by=user['user'], schedule_time='2023-03-08T22:55:29.118928+01:00',
                                      sms_sender='goodie', phone_number=['+2347063704879'])
 
         url = reverse('retrieve-update-destroy', args=[create_sms.id])
         response = self.client.put(url,
                                    data={'name': 'Test SMS Update', 'action_type': 'SMS', 'description': 'sms body',
                                          'created_by': user['user_id'],
-                                         'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                         'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                          'sms_sender': 'goodie', 'phone_number': ['+2347063704879']},
                                    format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -122,12 +122,12 @@ class ActionTests(APITestCase):
         user = self.get_user()
         create_reminder = self.create_reminder(name='Test', action_type='Reminder', description='reminder body',
                                                created_by=user['user'],
-                                               schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                               schedule_time='2023-03-08T22:55:29.118928+01:00',
                                                email='oyedeleyusuff@gmail.com')
         url = reverse('retrieve-update-destroy', args=[create_reminder.id])
         response = self.client.put(url, data={'name': 'Test', 'action_type': 'Reminder', 'description': 'reminder body',
                                               'created_by': user['user_id'],
-                                              'schedule_time': '2023-03-07T18:55:29.118928+01:00',
+                                              'schedule_time': '2023-03-08T18:55:29.118928+01:00',
                                               'email': 'oyedeleyusuff@gmail.com'}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -165,3 +165,95 @@ class ActionTests(APITestCase):
         url = reverse('retrieve-update-destroy', args=[create_reminder.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_delete_mail(self):
+        user = self.get_user()
+        create_mail = self.create_mail(name='Test', action_type='Mail', subject='Update Mail Subject',
+                                       description='Update Mail Description', email='yoyedele@afexnigeria.com',
+                                       receiver_mail=['oyedeleyusuff@gmail.com'],
+                                       schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                       created_by=user['user'])
+        url = reverse('retrieve-update-destroy', args=[create_mail.id])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_delete_sms(self):
+        user = self.get_user()
+
+        create_sms = self.create_sms(name='Test SMS', action_type='SMS', description='sms body',
+                                     created_by=user['user'], schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                     sms_sender='goodie', phone_number=['+2347063704879'])
+
+        url = reverse('retrieve-update-destroy', args=[create_sms.id])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_delete_reminder(self):
+        user = self.get_user()
+        create_reminder = self.create_reminder(name='Test', action_type='Reminder', description='reminder body',
+                                               created_by=user['user'],
+                                               schedule_time='2023-03-07T18:55:29.118928+01:00',
+                                               email='oyedeleyusuff@gmail.com')
+        url = reverse('retrieve-update-destroy', args=[create_reminder.id])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_cancel_mail(self):
+        mail_url = reverse('create-list')
+        mail_response = self.client.post(mail_url,
+                                         data={'name': 'Testing', 'action_type': 'Mail', 'subject': 'Mail Subject',
+                                               'description': 'Mail Testing',
+                                               'email': 'oyedeleyusuff@gmail.com',
+                                               'receiver_mail': ['yoyedele@afexnigeria.com'],
+                                               'schedule_time': '2023-03-08T22:55:29.118928+01:00',
+                                               'created_by': self.get_user()['user_id']}, format='json')
+        url = reverse('cancel-action')
+        response = self.client.post(url, data={'task_id': mail_response.data['task_id']})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertContains(response, 'message')
+
+    def test_cancel_sms(self):
+        sms_url = reverse('create-list')
+
+        sms_response = self.client.post(sms_url, data={'name': 'Testing', 'action_type': 'SMS',
+                                                       'description': 'SMS Testing',
+                                                       'sms_sender': 'Goodie',
+                                                       'phone_number': ['+2347063704879'],
+                                                       'schedule_time': '2023-03-08T18:55:29.118928+01:00',
+                                                       'created_by': self.get_user()['user_id']}, format='json')
+
+        url = reverse('cancel-action')
+        response = self.client.post(url, data={'task_id': sms_response.data['task_id']})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertContains(response, 'message')
+
+    def test_create_user(self):
+        url = reverse('create-list-user')
+        response = self.client.post(url, data={'username': 'goodie', 'password': '153692', 'first_name': 'Yusuf',
+                                               'last_name': 'Oyedele'}, format='json', **self.get_user())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_list_user(self):
+        url = reverse('create-list-user')
+        response = self.client.get(url, format='json', **self.get_user())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # def test_create_reminder(self):
+    #     auth_url = reverse('create-list')
+    #
+    #     auth_response = self.client.post(auth_url, data={'name': 'Testing', 'action_type': 'Reminder',
+    #                                            'description': 'Reminder Testing',
+    #                                            'email': 'oyedeleyusuff@gmail.com',
+    #                                            'schedule_time': '2023-03-08T18:55:29.118928+01:00',
+    #                                            'created_by': self.get_user()['user_id']}, format='json')
+    #     print(auth_response.data)
+    #     url = reverse('create-reminder')
+    #     response = self.client.post(url, data={
+    #         'auth_url': auth_response.data['auth_url'],
+    #         'obj_id': auth_response.data['data']['id'],
+    #         'user_id': auth_response.data['data']['created_by']
+    #     }, format='json')
+    #
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertContains(response, 'message')

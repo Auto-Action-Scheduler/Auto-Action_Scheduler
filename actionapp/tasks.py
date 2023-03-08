@@ -76,7 +76,7 @@ def send_sms(pk):
 
 @app.task()
 def sync_reminder(name, description, schedule_time):
-    sync_event(name, description, schedule_time)
+    sync_event()
 
 
 @app.task()
