@@ -271,12 +271,14 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
                 app.control.revoke(update.task_id, terminate=True)
                 task = send_email.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.is_executed = False
                 update.save()
                 return update
             elif update.schedule_time.date() > timezone.localtime():
                 app.control.revoke(update.task_id, terminate=True)
                 task = send_email.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.is_executed = False
                 update.save()
                 return update
         elif update.action_type == 'SMS':
@@ -284,12 +286,14 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
                 app.control.revoke(update.task_id, terminate=True)
                 task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.is_executed = False
                 update.save()
                 return update
             elif update.schedule_time.date() > timezone.localtime():
                 app.control.revoke(update.task_id, terminate=True)
                 task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.is_executed = False
                 update.save()
                 return update
         return update
