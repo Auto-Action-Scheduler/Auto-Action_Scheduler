@@ -58,6 +58,7 @@ class ActionCreateListAPIView(ListCreateAPIView):
                     data.save()
                     return Response(serializer.data, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
+                request.session['reminder_id'] = data.id
                 auth = sync_event()
                 return Response({'data': serializer.data, 'auth_url': auth}, status=status.HTTP_200_OK)
 
@@ -74,6 +75,8 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
     def put(self, request, *args, **kwargs):
         updated_data = super(ActionRetrieveUpdateDestroyAPIView, self).put(request, *args, **kwargs)
         if updated_data.data['action_type'] == 'Reminder':
+            print(updated_data.data['id'])
+            request.session['reminder_id'] = updated_data.data['id']
             auth = sync_event()
             return Response({'data': updated_data.data, 'auth_url': auth})
         return updated_data
@@ -120,15 +123,18 @@ class CreateReminderAPIView(CreateAPIView):
             auth_url = serializer.data['auth_url']
             obj_id = serializer.data['obj_id']
             user_id = serializer.data['user_id']
-            try:
-                data = Action.objects.filter(id=obj_id, created_by_id=user_id).first()
-                print(data)
-                g_auth_endpoint(auth_url=auth_url, name=data.name, description=data.description,
-                                schedule_time=data.schedule_time)
-                return Response({'message': 'Created Successfully'}, status=status.HTTP_200_OK)
-            except Exception as e:
-                print(e)
-                raise ValidationError('An error occurred.')
+            if obj_id != request.session['reminder_id']:
+                raise ValidationError('Wrong obj_id for the url')
+            data = Action.objects.filter(id=obj_id, created_by_id=user_id).first()
+            if data:
+                try:
+                    g_auth_endpoint(auth_url=auth_url, name=data.name, description=data.description,
+                                    schedule_time=data.schedule_time)
+                    return Response({'message': 'Created Successfully'}, status=status.HTTP_200_OK)
+                except Exception as e:
+                    print(e)
+                    raise ValidationError('An error occurred.')
+            return Response('data not exists.', status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

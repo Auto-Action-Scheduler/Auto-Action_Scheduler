@@ -269,31 +269,35 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
         if update.action_type == 'Mail':
             if update.schedule_time.date() == timezone.localtime().date():
                 app.control.revoke(update.task_id, terminate=True)
-                task = send_email.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
                 update.is_executed = False
                 update.save()
-                return update
-            elif update.schedule_time.date() > timezone.localtime():
-                app.control.revoke(update.task_id, terminate=True)
                 task = send_email.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.save()
+                return update
+            elif update.schedule_time.date() > timezone.localtime().date():
+                app.control.revoke(update.task_id, terminate=True)
                 update.is_executed = False
+                update.save()
+                task = send_email.apply_async((update.pk,), eta=update.schedule_time)
+                update.task_id = task.id
                 update.save()
                 return update
         elif update.action_type == 'SMS':
             if update.schedule_time.date() == timezone.localtime().date():
                 app.control.revoke(update.task_id, terminate=True)
-                task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
                 update.is_executed = False
                 update.save()
-                return update
-            elif update.schedule_time.date() > timezone.localtime():
-                app.control.revoke(update.task_id, terminate=True)
                 task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
                 update.task_id = task.id
+                update.save()
+                return update
+            elif update.schedule_time.date() > timezone.localtime().date():
+                app.control.revoke(update.task_id, terminate=True)
                 update.is_executed = False
+                update.save()
+                task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
+                update.task_id = task.id
                 update.save()
                 return update
         return update

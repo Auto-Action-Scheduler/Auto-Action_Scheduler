@@ -51,26 +51,21 @@ def sync_event():
 
 def g_auth_endpoint(auth_url, name, description, schedule_time):
     # state = request.GET.get('state', None)
-    print(auth_url)
 
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
         'client_secret.json', SCOPES)
     flow.redirect_uri = config('GOOGLE_REDIRECT_URL')
-    print(description)
     # get the full URL that we are on, including all the "?param1=token&param2=key" parameters that google has sent us.
     # authorization_response = request.build_absolute_uri()
     # print(authorization_response)
 
     # now turn those parameters into a token.
     flow.fetch_token(authorization_response=auth_url)
-    print(schedule_time)
 
     creds = flow.credentials
-    print(creds)
 
     try:
         service = build('calendar', 'v3', credentials=creds)
-        print('got here2')
         event = {
             'summary': name,  # event's title
             'description': description,  # event's description
@@ -92,7 +87,6 @@ def g_auth_endpoint(auth_url, name, description, schedule_time):
         }
 
         events = service.events().insert(calendarId='primary', body=event).execute()
-        print("got here")
         return events
 
     except HttpError as error:
