@@ -58,7 +58,6 @@ class ActionCreateListAPIView(ListCreateAPIView):
                     data.save()
                     return Response(serializer.data, status=status.HTTP_200_OK)
             elif data.action_type == "Reminder":
-                request.session['reminder_id'] = data.id
                 auth = sync_event()
                 return Response({'data': serializer.data, 'auth_url': auth}, status=status.HTTP_200_OK)
 
@@ -75,8 +74,6 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
     def put(self, request, *args, **kwargs):
         updated_data = super(ActionRetrieveUpdateDestroyAPIView, self).put(request, *args, **kwargs)
         if updated_data.data['action_type'] == 'Reminder':
-            print(updated_data.data['id'])
-            request.session['reminder_id'] = updated_data.data['id']
             auth = sync_event()
             return Response({'data': updated_data.data, 'auth_url': auth})
         return updated_data
@@ -122,10 +119,8 @@ class CreateReminderAPIView(CreateAPIView):
         if serializer.is_valid():
             auth_url = serializer.data['auth_url']
             obj_id = serializer.data['obj_id']
-            user_id = serializer.data['user_id']
-            if obj_id != request.session['reminder_id']:
-                raise ValidationError('Wrong obj_id for the url')
-            data = Action.objects.filter(id=obj_id, created_by_id=user_id).first()
+            uid = serializer.data['uid']
+            data = Action.objects.filter(id=obj_id, uid=uid).first()
             if data:
                 try:
                     g_auth_endpoint(auth_url=auth_url, name=data.name, description=data.description,

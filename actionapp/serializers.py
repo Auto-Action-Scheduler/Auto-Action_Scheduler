@@ -170,7 +170,8 @@ class ActionSerializer(serializers.ModelSerializer):
                 'created_by': instance.created_by.id,
                 'schedule_time': instance.schedule_time,
                 'timestamp': instance.timestamp,
-                'email': instance.email
+                'email': instance.email,
+                'uid': instance.uid
             }
 
 
@@ -180,8 +181,8 @@ class CancelActionSerializer(serializers.Serializer):
 
 class CreateReminderSerializer(serializers.Serializer):
     auth_url = serializers.URLField()
-    user_id = serializers.IntegerField()
     obj_id = serializers.IntegerField()
+    uid = serializers.UUIDField()
 
 
 class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
@@ -355,7 +356,8 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
                 'created_by': instance.created_by.id,
                 'schedule_time': instance.schedule_time,
                 'timestamp': instance.timestamp,
-                'email': instance.email
+                'email': instance.email,
+                'uid': instance.uid
             }
 
 # class MessageSerializer(serializers.ModelSerializer):

@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -36,6 +38,7 @@ class Action(models.Model):
     sms_sender = models.CharField(max_length=200, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     task_id = models.CharField(max_length=200, null=True, blank=True)
+    uid = models.UUIDField(default=uuid.uuid4)
 
     objects = models.Manager()
     active_objects = ActiveManager()
