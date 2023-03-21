@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 
+
 # Create your models here.
 
 class ActiveManager(models.Manager):
@@ -24,29 +25,22 @@ class Action(models.Model):
     )
 
     name = models.CharField(max_length=200)
-    description = models.TextField()
     schedule_time = models.DateTimeField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
-    is_executed = models.BooleanField(default=False)
-    action_type = models.CharField(max_length=150, choices=TYPES)
-    subject = models.CharField(max_length=250, null=True, blank=True)
-    attachment = models.FileField(null=True, blank=True, upload_to="attachment")
-    receiver_mail = models.JSONField(default=list, null=True, blank=True)
-    email = models.EmailField(null=True, blank=True)
-    phone_number = models.JSONField(default=list, null=True, blank=True)
-    sms_sender = models.CharField(max_length=200, null=True, blank=True)
+    actions = models.JSONField(default=list)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     task_id = models.CharField(max_length=200, null=True, blank=True)
-    uid = models.UUIDField(default=uuid.uuid4)
 
     objects = models.Manager()
     active_objects = ActiveManager()
     deleted_objects = DeleteManager()
 
+    class Meta:
+        unique_together = ('created_by', 'name', 'schedule_time')
+
     def __str__(self):
         return self.name
-
 
 # class Mail(Action):
 #     subject = models.CharField(max_length=250, null=True, blank=True)

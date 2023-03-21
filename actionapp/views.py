@@ -1,4 +1,10 @@
+import base64
+import json
+import uuid
+
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage, default_storage
 from django.core.mail import send_mail
 from django.shortcuts import render
 from django.utils import timezone
@@ -15,10 +21,10 @@ from utils.outbox import send_sms
 from .calendarapi import sync_event, g_auth_endpoint
 # Create your views here.
 from .serializers import (ActionSerializer, CancelActionSerializer, CreateReminderSerializer, UserSerializer,
-                          ActionRetrieveUpdateDestroySerializer)
+                          ActionRetrieveUpdateDestroySerializer, AttachmentSerializer)
 from .models import Action
 from utils.json_renderer import CustomRenderer
-from .tasks import sync_reminder, run_send_mail, send_email, send_sms
+from .tasks import sync_reminder, run_send_mail, perform_task, send_sms
 
 
 class ActionCreateListAPIView(ListCreateAPIView):
@@ -27,39 +33,27 @@ class ActionCreateListAPIView(ListCreateAPIView):
     parser_classes = (MultiPartParser, JSONParser)
     renderer_classes = (CustomRenderer,)
     permission_classes = (IsAuthenticated,)
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['action_type']
+
+    # filter_backends = [DjangoFilterBackend]
+    # filterset_fields = ['action_type']
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             data = serializer.save()
-            now = timezone.localtime()
-            if data.action_type == "Mail":
-                if data.schedule_time.date() == now.date():
-                    task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    data.task_id = task.id
-                    data.save()
-                    return Response(serializer.data, status=status.HTTP_200_OK)
-                elif data.schedule_time.date() > now.date():
-                    task = send_email.apply_async((data.pk,), eta=data.schedule_time)
-                    data.task_id = task.id
-                    data.save()
-                    return Response(serializer.data, status=status.HTTP_200_OK)
-            elif data.action_type == "SMS":
-                if data.schedule_time.date() == now.date():
-                    task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    data.task_id = task.id
-                    data.save()
-                    return Response(serializer.data, status=status.HTTP_200_OK)
-                elif data.schedule_time.date() > now.date():
-                    task = send_sms.apply_async((data.pk,), eta=data.schedule_time)
-                    data.task_id = task.id
-                    data.save()
-                    return Response(serializer.data, status=status.HTTP_200_OK)
-            elif data.action_type == "Reminder":
-                auth = sync_event()
-                return Response({'data': serializer.data, 'auth_url': auth}, status=status.HTTP_200_OK)
+            if data.actions:
+                task = perform_task.apply_async((data.pk,), eta=data.schedule_time)
+                data.task_id = task.id
+                data.save()
+                for action in data.actions:
+                    if action['action_type'] == 'Reminder':
+                        auth = sync_event()
+                        action['auth_url'] = auth
+                        action['uid'] = json.dumps(str(uuid.uuid4())).strip('"')
+
+                        # serialize = json.loads(action['uid'])
+                data.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -71,13 +65,6 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
     renderer_classes = (CustomRenderer,)
     permission_classes = (IsAuthenticated,)
 
-    def put(self, request, *args, **kwargs):
-        updated_data = super(ActionRetrieveUpdateDestroyAPIView, self).put(request, *args, **kwargs)
-        if updated_data.data['action_type'] == 'Reminder':
-            auth = sync_event()
-            return Response({'data': updated_data.data, 'auth_url': auth})
-        return updated_data
-
     def delete(self, request, *args, **kwargs):
         mail_id = self.kwargs.get('pk')
         try:
@@ -85,10 +72,10 @@ class ActionRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
             mail.is_deleted = not mail.is_deleted
             mail.save()
             if mail.is_deleted:
-                return Response({"data": "Deleted Successfully"}, status=status.HTTP_200_OK)
+                return Response({"data": "Deleted Successfully. Sope otilo"}, status=status.HTTP_200_OK)
             return Response({"data": "Retrieved Successfully"}, status=status.HTTP_200_OK)
         except Action.DoesNotExist:
-            raise ValidationError('Question does not exist.')
+            raise ValidationError('Question does not exist. Pressure tiwa')
 
 
 class CancelActionAPIView(CreateAPIView):
@@ -105,7 +92,7 @@ class CancelActionAPIView(CreateAPIView):
                 app.control.revoke(id, terminate=True)
                 return Response({'message': 'Canceled Successfully'}, status=status.HTTP_200_OK)
             except:
-                raise ValidationError('An error occurred.')
+                raise ValidationError('An error occurred. Pressure ti wa')
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -120,16 +107,41 @@ class CreateReminderAPIView(CreateAPIView):
             auth_url = serializer.data['auth_url']
             obj_id = serializer.data['obj_id']
             uid = serializer.data['uid']
-            data = Action.objects.filter(id=obj_id, uid=uid).first()
+            data = Action.active_objects.filter(id=obj_id).first()
             if data:
-                try:
-                    g_auth_endpoint(auth_url=auth_url, name=data.name, description=data.description,
-                                    schedule_time=data.schedule_time)
-                    return Response({'message': 'Created Successfully'}, status=status.HTTP_200_OK)
-                except Exception as e:
-                    print(e)
-                    raise ValidationError('An error occurred.')
-            return Response('data not exists.', status=status.HTTP_400_BAD_REQUEST)
+                for action in data.actions:
+                    if action['action_type'] == 'Reminder':
+                        print(action)
+                        if action['uid'] == uid:
+                            try:
+                                g_auth_endpoint(auth_url=auth_url, name=data.name, description=action['description'],
+                                                schedule_time=data.schedule_time)
+                                action['is_executed'] = True
+                                data.save()
+                                return Response({'message': 'Created Successfully'}, status=status.HTTP_200_OK)
+                            except Exception as e:
+                                print(e)
+                                raise ValidationError('Pressure ti wa.')
+            return Response('data not exists. Pressure ti wa', status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UploadAttachmentAPIView(CreateAPIView):
+    serializer_class = AttachmentSerializer
+    renderer_classes = (CustomRenderer,)
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            file_uploaded = request.FILES.get('attachment')
+            file_directory = "attachment/"
+            file_name = str(file_uploaded)
+            file_path = file_directory + file_name
+            storage = default_storage
+            path = storage.save(file_path, ContentFile(file_uploaded.read()))
+            return Response({'file_path': path}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

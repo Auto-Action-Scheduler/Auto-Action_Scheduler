@@ -1,12 +1,18 @@
+import json
+import uuid
+
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.utils import timezone
+from phonenumber_field.phonenumber import to_python
 from rest_framework import serializers
+from phonenumber_field.serializerfields import PhoneNumberField
+from rest_framework.exceptions import ValidationError
 
 from AutoActionScheduler.celery import app
 from .calendarapi import sync_event
 from .models import Action
-from .tasks import send_email, send_sms
+from .tasks import perform_task, send_sms
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -21,31 +27,31 @@ class UserSerializer(serializers.ModelSerializer):
         return super(UserSerializer, self).create(validated_data)
 
 
-class ActionSerializer(serializers.ModelSerializer):
-    phone_number = serializers.ListField(child=serializers.CharField(), max_length=50, required=False)
+class CustomPhoneNumberField(PhoneNumberField):
+    def to_internal_value(self, data):
+        phone_number = to_python(data)
+        if phone_number and not phone_number.is_valid():
+            raise ValidationError(self.error_messages["invalid"])
+        return phone_number.as_e164
+
+
+class ActionField(serializers.Serializer):
+    TYPES = (
+        ("Mail", "Mail"),
+        ("SMS", "SMS"),
+        ("Reminder", "Reminder")
+    )
+    action_type = serializers.ChoiceField(choices=TYPES)
+    description = serializers.CharField()
+    email = serializers.EmailField(required=False)
     receiver_mail = serializers.ListField(child=serializers.EmailField(), required=False)
-
-    class Meta:
-        model = Action
-        fields = ('id', 'name', 'created_by', 'subject', 'action_type', 'description', 'attachment', 'receiver_mail',
-                  'schedule_time',
-                  'email', 'phone_number', 'sms_sender', 'timestamp')
-        extra_kwargs = {
-            'timestamp': {'read_only': True}
-        }
-
-    def validate_schedule_time(self, value):
-        if value and value <= timezone.now():
-            raise serializers.ValidationError("Schedule time must be in future.")
-        return value
-
-    def validate_attachment(self, value):
-        size_limit = 1 * 1024 * 1024
-
-        if value and value.size > size_limit:
-            raise serializers.ValidationError('Attachment size must not greater than 1MB')
-
-        return value
+    phone_number = serializers.ListField(child=CustomPhoneNumberField(), required=False)
+    subject = serializers.CharField(max_length=250, required=False)
+    sms_sender = serializers.CharField(max_length=250, required=False)
+    attachment = serializers.CharField(required=False)
+    is_executed = serializers.BooleanField(default=False)
+    auth_url = serializers.CharField(required=False)
+    uid = serializers.CharField(required=False)
 
     def validate(self, attrs):
         action_type = attrs.get('action_type')
@@ -54,9 +60,6 @@ class ActionSerializer(serializers.ModelSerializer):
         email = attrs.get('email')
         phone_number = attrs.get('phone_number')
         sms_sender = attrs.get('sms_sender')
-        name = attrs.get('name')
-        description = attrs.get('description')
-        schedule_time = attrs.get('schedule_time')
         attachment = attrs.get('attachment')
 
         if action_type == "Mail":
@@ -81,10 +84,6 @@ class ActionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Email is not needed.')
             elif not phone_number:
                 raise serializers.ValidationError('Phone number must be provided')
-            elif phone_number:
-                for num in phone_number:
-                    if num[0] != "+":
-                        raise serializers.ValidationError('Phone number format should be like +23470XXXXXX')
             elif not sms_sender:
                 raise serializers.ValidationError('sms sender must be provided')
         elif action_type == "Reminder":
@@ -100,79 +99,38 @@ class ActionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Phone number is not needed')
             elif sms_sender:
                 raise serializers.ValidationError('sms sender is not needed')
-
-        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
-                                        action_type=action_type,
-                                        subject=subject, receiver_mail=receiver_mail, email=email).exists():
-            raise serializers.ValidationError("Data already exist.")
-
-        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
-                                        action_type=action_type, email=email).exists():
-            raise serializers.ValidationError("Data already exist.")
-
-        if Action.active_objects.filter(name=name, description=description, schedule_time=schedule_time,
-                                        action_type=action_type, phone_number=phone_number,
-                                        sms_sender=sms_sender).exists():
-            raise serializers.ValidationError("Data already exist.")
-
         return attrs
 
-    def to_representation(self, instance):
-        if instance.action_type == "Mail":
-            if not instance.attachment:
-                return {
-                    'id': instance.id,
-                    'name': instance.name,
-                    'action_type': instance.action_type,
-                    'description': instance.description,
-                    'created_by': instance.created_by.id,
-                    'schedule_time': instance.schedule_time,
-                    'timestamp': instance.timestamp,
-                    'subject': instance.subject,
-                    'email': instance.email,
-                    'receiver_mail': instance.receiver_mail,
-                    'task_id': instance.task_id
-                }
-            elif instance.attachment:
-                return {
-                    'id': instance.id,
-                    'name': instance.name,
-                    'action_type': instance.action_type,
-                    'description': instance.description,
-                    'cerated_by': instance.created_by.id,
-                    'schedule_time': instance.schedule_time,
-                    'timestamp': instance.timestamp,
-                    'subject': instance.subject,
-                    'email': instance.email,
-                    'receiver_mail': instance.receiver_mail,
-                    'task_id': instance.task_id,
-                    'attachment': instance.attachment.url
-                }
-        elif instance.action_type == "SMS":
-            return {
-                'id': instance.id,
-                'name': instance.name,
-                'action_type': instance.action_type,
-                'description': instance.description,
-                'created_by': instance.created_by.id,
-                'schedule_time': instance.schedule_time,
-                'timestamp': instance.timestamp,
-                'phone_number': instance.phone_number,
-                'sms_sender': instance.sms_sender,
-                'task_id': instance.task_id
-            }
-        elif instance.action_type == "Reminder":
-            return {
-                'id': instance.id,
-                'name': instance.name,
-                'action_type': instance.action_type,
-                'description': instance.description,
-                'created_by': instance.created_by.id,
-                'schedule_time': instance.schedule_time,
-                'timestamp': instance.timestamp,
-                'email': instance.email,
-                'uid': instance.uid
-            }
+
+class ActionSerializer(serializers.ModelSerializer):
+    actions = serializers.ListField(child=ActionField())
+
+    class Meta:
+        model = Action
+        fields = ('id', 'name', 'created_by', 'schedule_time', 'actions', 'task_id', 'timestamp')
+        extra_kwargs = {
+            'timestamp': {'read_only': True}
+        }
+
+    def validate_schedule_time(self, value):
+        if value and value <= timezone.now():
+            raise serializers.ValidationError('Schedule time must be in future.')
+        return value
+
+    def validate_actions(self, value):
+        if not value:
+            raise serializers.ValidationError('Actions must be provided')
+        return value
+
+    # def validate(self, attrs):
+    #     name = attrs.get('name')
+    #     schedule_time = attrs.get('schedule_time')
+    #     actions = attrs.get('actions')
+    #
+    #     if Action.active_objects.filter(name=name, schedule_time=schedule_time, actions=actions).exists():
+    #         raise serializers.ValidationError("Data already exist.")
+    #
+    #     return attrs
 
 
 class CancelActionSerializer(serializers.Serializer):
@@ -185,15 +143,21 @@ class CreateReminderSerializer(serializers.Serializer):
     uid = serializers.UUIDField()
 
 
+class AttachmentSerializer(serializers.Serializer):
+    attachment = serializers.FileField()
+
+    def validate_attachment(self, value):
+        size_limit = 1 * 1024 * 1024
+        if value and value.size > size_limit:
+            raise serializers.ValidationError('Attachment must not  greater than 1MB')
+
+
 class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
-    phone_number = serializers.ListField(child=serializers.CharField(), max_length=50, required=False)
-    receiver_mail = serializers.ListField(child=serializers.EmailField(), required=False)
+    actions = serializers.ListField(child=ActionField())
 
     class Meta:
         model = Action
-        fields = ('id', 'name', 'created_by', 'subject', 'action_type', 'description', 'attachment', 'receiver_mail',
-                  'schedule_time',
-                  'email', 'phone_number', 'sms_sender', 'timestamp')
+        fields = ('id', 'name', 'created_by', 'schedule_time', 'actions', 'task_id', 'timestamp')
         extra_kwargs = {
             'timestamp': {'read_only': True}
         }
@@ -203,162 +167,28 @@ class ActionRetrieveUpdateDestroySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Schedule time must be in future.")
         return value
 
+    def validate_actions(self, value):
+        if not value:
+            raise serializers.ValidationError('Actions must be provided')
+        return value
+
     def update(self, instance, validated_data):
-        action_type = validated_data.get('action_type')
-        subject = validated_data.get('subject')
-        receiver_mail = validated_data.get('receiver_mail')
-        email = validated_data.get('email')
-        phone_number = validated_data.get('phone_number')
-        sms_sender = validated_data.get('sms_sender')
-        attachment = validated_data.get('attachment')
-        size_limit = 1 * 1024 * 1024
-
-        if action_type == "Mail":
-            if instance.action_type == "Reminder" or instance.action_type == "SMS":
-                raise serializers.ValidationError("You can't swap the action type.")
-            elif not subject:
-                raise serializers.ValidationError('Mail subject must be provided.')
-            elif not receiver_mail:
-                raise serializers.ValidationError('Receiver mail must be provided.')
-            elif not email:
-                raise serializers.ValidationError('Email must be provided.')
-            elif phone_number:
-                raise serializers.ValidationError('Phone number is not needed')
-            elif sms_sender:
-                raise serializers.ValidationError('sms sender is not needed')
-            elif attachment and attachment.size > size_limit:
-                raise serializers.ValidationError('Attachment size must not greater than 1MB')
-
-        if action_type == "SMS":
-            if instance.action_type == "Reminder" or instance.action_type == "Mail":
-                raise serializers.ValidationError("You can't swap the action type.")
-            elif subject:
-                raise serializers.ValidationError('Subject is not needed.')
-            elif receiver_mail:
-                raise serializers.ValidationError('Receiver mail is not needed.')
-            elif attachment:
-                raise serializers.ValidationError('Attachment is not needed.')
-            elif email:
-                raise serializers.ValidationError('Email is not needed.')
-            elif not phone_number:
-                raise serializers.ValidationError('Phone number must be provided')
-            elif phone_number:
-                for num in phone_number:
-                    if num[0] != "+":
-                        raise serializers.ValidationError('Phone number format should be like +23470XXXXXX')
-            elif not sms_sender:
-                raise serializers.ValidationError('sms sender must be provided')
-
-        if action_type == "Reminder":
-            if instance.action_type == "Mail" or instance.action_type == "SMS":
-                raise serializers.ValidationError("You can't swap the action type.")
-            elif subject:
-                raise serializers.ValidationError('Mail subject is not needed.')
-            elif receiver_mail:
-                raise serializers.ValidationError('Receiver mail is not needed.')
-            elif attachment:
-                raise serializers.ValidationError('Attachment is not needed.')
-            elif not email:
-                raise serializers.ValidationError('Email must be provided.')
-            elif phone_number:
-                raise serializers.ValidationError('Phone number is not needed')
-            elif sms_sender:
-                raise serializers.ValidationError('sms sender is not needed')
 
         update = super().update(instance, validated_data)
+        if update.actions:
+            app.control.revoke(update.task_id, terminate=True)
+            for action in update.actions:
+                action['is_executed'] = False
+                if action['action_type'] == 'Reminder':
+                    action['uid'] = json.dumps(str(uuid.uuid4())).strip('"')
+                    auth = sync_event()
+                    action['auth_url'] = auth
+            update.save()
+            task = perform_task.apply_async((update.pk,), eta=update.schedule_time)
+            update.task_id = task.id
+            update.save()
 
-        if update.action_type == 'Mail':
-            if update.schedule_time.date() == timezone.localtime().date():
-                app.control.revoke(update.task_id, terminate=True)
-                update.is_executed = False
-                update.save()
-                task = send_email.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
-                update.save()
-                return update
-            elif update.schedule_time.date() > timezone.localtime().date():
-                app.control.revoke(update.task_id, terminate=True)
-                update.is_executed = False
-                update.save()
-                task = send_email.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
-                update.save()
-                return update
-        elif update.action_type == 'SMS':
-            if update.schedule_time.date() == timezone.localtime().date():
-                app.control.revoke(update.task_id, terminate=True)
-                update.is_executed = False
-                update.save()
-                task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
-                update.save()
-                return update
-            elif update.schedule_time.date() > timezone.localtime().date():
-                app.control.revoke(update.task_id, terminate=True)
-                update.is_executed = False
-                update.save()
-                task = send_sms.apply_async((update.pk,), eta=update.schedule_time)
-                update.task_id = task.id
-                update.save()
-                return update
         return update
-
-    def to_representation(self, instance):
-        if instance.action_type == "Mail":
-            if not instance.attachment:
-                return {
-                    'id': instance.id,
-                    'name': instance.name,
-                    'action_type': instance.action_type,
-                    'description': instance.description,
-                    'created_by': instance.created_by.id,
-                    'schedule_time': instance.schedule_time,
-                    'timestamp': instance.timestamp,
-                    'subject': instance.subject,
-                    'email': instance.email,
-                    'receiver_mail': instance.receiver_mail,
-                    'task_id': instance.task_id
-                }
-            elif instance.attachment:
-                return {
-                    'id': instance.id,
-                    'name': instance.name,
-                    'action_type': instance.action_type,
-                    'description': instance.description,
-                    'cerated_by': instance.created_by.id,
-                    'schedule_time': instance.schedule_time,
-                    'timestamp': instance.timestamp,
-                    'subject': instance.subject,
-                    'email': instance.email,
-                    'receiver_mail': instance.receiver_mail,
-                    'task_id': instance.task_id,
-                    'attachment': instance.attachment.url
-                }
-        elif instance.action_type == "SMS":
-            return {
-                'id': instance.id,
-                'name': instance.name,
-                'action_type': instance.action_type,
-                'description': instance.description,
-                'created_by': instance.created_by.id,
-                'schedule_time': instance.schedule_time,
-                'timestamp': instance.timestamp,
-                'phone_number': instance.phone_number,
-                'sms_sender': instance.sms_sender,
-                'task_id': instance.task_id
-            }
-        elif instance.action_type == "Reminder":
-            return {
-                'id': instance.id,
-                'name': instance.name,
-                'action_type': instance.action_type,
-                'description': instance.description,
-                'created_by': instance.created_by.id,
-                'schedule_time': instance.schedule_time,
-                'timestamp': instance.timestamp,
-                'email': instance.email,
-                'uid': instance.uid
-            }
 
 # class MessageSerializer(serializers.ModelSerializer):
 #     class Meta:

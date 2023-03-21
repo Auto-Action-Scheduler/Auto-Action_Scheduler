@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'rest_framework_simplejwt',
     'django_filters',
+    'phonenumber_field',
 ]
 
 MIDDLEWARE = [
@@ -146,6 +147,7 @@ STATUS_CODES = {
 }
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
 
 CELERY_BROKER_URL = config('CELERY_BROKER_URL')
 CELERY_ACCEPT_CONTENT = ['application/json']

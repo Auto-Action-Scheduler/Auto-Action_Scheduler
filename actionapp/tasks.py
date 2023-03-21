@@ -23,7 +23,7 @@ def every_hour_task():
 
     for mail in mails:
         if mail.schedule_time.date() == now.date() and mail.schedule_time.hour == now.hour:
-            send_email.apply_async((mail.pk,),
+            perform_task.apply_async((mail.pk,),
                                    eta=timezone.datetime(year=mail.schedule_time.year, month=mail.schedule_time.month,
                                                          day=mail.schedule_time.day,
                                                          hour=mail.schedule_time.hour,
@@ -40,40 +40,38 @@ def every_hour_task():
 
 
 @app.task()
-def send_email(pk):
-    mail = Action.active_objects.filter(action_type="Mail").exclude(is_executed=True).filter(
-        id=pk).first()
+def perform_task(pk):
+    obj = Action.active_objects.filter(id=pk).first()
 
-    if mail:
-        send_mail(subject=mail.subject, message=mail.description, from_email=mail.email,
-                  recipient_list=mail.receiver_mail)
-        mail.is_executed = True
-        mail.save()
+    if obj:
+        for action in obj.actions:
+            if action['action_type'] == 'Mail':
+                send_mail(subject=action['subject'], message=action['description'], from_email=action['email'],
+                          recipient_list=action['receiver_mail'])
+                action['is_executed'] = True
+                obj.save()
+            elif action['action_type'] == 'SMS':
+                username = config('SMS_USERNAME')
+                api_key = config('SMS_API_KEY')
+                url = "https://api.africastalking.com/version1/messaging"
+                headers = {
+                    "apiKey": api_key,
+                    "Content_Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json"
+                }
+                data = {
+                    "username": username,
+                    "message": action['description'],
+                    "to": ",".join(action['phone_number'])
+                }
 
+                response = requests.post(url=url, headers=headers, data=data)
+                action['is_executed'] = True
+                obj.save()
 
 @app.task()
 def send_sms(pk):
-    sms = Action.active_objects.filter(action_type='SMS').exclude(is_executed=True).filter(
-        id=pk).first()
-    username = config('SMS_USERNAME')
-    api_key = config('SMS_API_KEY')
-    url = "https://api.africastalking.com/version1/messaging"
-    headers = {
-        "apiKey": api_key,
-        "Content_Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json"
-    }
-    data = {
-        "username": username,
-        "message": sms.description,
-        "to": ",".join(sms.phone_number)
-    }
-
-    response = requests.post(url=url, headers=headers, data=data)
-    sms.is_executed = True
-    sms.save()
-
-
+    pass
 @app.task()
 def sync_reminder(name, description, schedule_time):
     sync_event()
