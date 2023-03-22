@@ -122,16 +122,6 @@ class ActionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Actions must be provided')
         return value
 
-    # def validate(self, attrs):
-    #     name = attrs.get('name')
-    #     schedule_time = attrs.get('schedule_time')
-    #     actions = attrs.get('actions')
-    #
-    #     if Action.active_objects.filter(name=name, schedule_time=schedule_time, actions=actions).exists():
-    #         raise serializers.ValidationError("Data already exist.")
-    #
-    #     return attrs
-
 
 class CancelActionSerializer(serializers.Serializer):
     task_id = serializers.UUIDField()
