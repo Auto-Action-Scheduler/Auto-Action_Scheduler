@@ -5,7 +5,7 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage, default_storage
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.shortcuts import render
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend

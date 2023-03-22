@@ -2,7 +2,7 @@ import json
 
 import africastalking
 import requests
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.utils.baseconv import base64
 from django.utils import timezone
 
@@ -24,11 +24,11 @@ def every_hour_task():
     for mail in mails:
         if mail.schedule_time.date() == now.date() and mail.schedule_time.hour == now.hour:
             perform_task.apply_async((mail.pk,),
-                                   eta=timezone.datetime(year=mail.schedule_time.year, month=mail.schedule_time.month,
-                                                         day=mail.schedule_time.day,
-                                                         hour=mail.schedule_time.hour,
-                                                         minute=mail.schedule_time.minute,
-                                                         second=mail.schedule_time.second))
+                                     eta=timezone.datetime(year=mail.schedule_time.year, month=mail.schedule_time.month,
+                                                           day=mail.schedule_time.day,
+                                                           hour=mail.schedule_time.hour,
+                                                           minute=mail.schedule_time.minute,
+                                                           second=mail.schedule_time.second))
     for message in messages:
         if message.schedule_time.date() == now.date() and message.schedule_time.hour == now.hour:
             send_sms.apply_async((message.pk,), eta=timezone.datetime(year=message.schedule_time.year,
@@ -46,10 +46,20 @@ def perform_task(pk):
     if obj:
         for action in obj.actions:
             if action['action_type'] == 'Mail':
-                send_mail(subject=action['subject'], message=action['description'], from_email=action['email'],
-                          recipient_list=action['receiver_mail'])
-                action['is_executed'] = True
-                obj.save()
+                if 'attachment' in action:
+                    email = EmailMessage(subject=action['subject'], body=action['description'],
+                                         from_email=action['email'], to=action['receiver_mail'])
+                    file = 'media/' + action['attachment']
+                    with open(file, 'rb') as f:
+                        file_data = f.read()
+                        file_name = 'attachment.pdf'
+                    email.attach(file_name, file_data, 'application/pdf')
+                    email.send()
+                elif not 'attachment' in action:
+                    send_mail(subject=action['subject'], message=action['description'], from_email=action['email'],
+                              recipient_list=action['receiver_mail'])
+                    action['is_executed'] = True
+                    obj.save()
             elif action['action_type'] == 'SMS':
                 username = config('SMS_USERNAME')
                 api_key = config('SMS_API_KEY')
@@ -69,9 +79,12 @@ def perform_task(pk):
                 action['is_executed'] = True
                 obj.save()
 
+
 @app.task()
 def send_sms(pk):
     pass
+
+
 @app.task()
 def sync_reminder(name, description, schedule_time):
     sync_event()
