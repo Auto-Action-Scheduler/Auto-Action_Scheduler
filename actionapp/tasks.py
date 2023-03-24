@@ -52,8 +52,8 @@ def perform_task(pk):
                     file = 'media/' + action['attachment']
                     with open(file, 'rb') as f:
                         file_data = f.read()
-                        file_name = 'attachment.pdf'
-                    email.attach(file_name, file_data, 'application/pdf')
+                        file_name = f.name.strip('media').strip('/attachment/')
+                    email.attach(file_name, file_data)
                     email.send()
                 elif not 'attachment' in action:
                     send_mail(subject=action['subject'], message=action['description'], from_email=action['email'],
