@@ -48,7 +48,7 @@ class ActionField(serializers.Serializer):
     phone_number = serializers.ListField(child=CustomPhoneNumberField(), required=False)
     subject = serializers.CharField(max_length=250, required=False)
     sms_sender = serializers.CharField(max_length=250, required=False)
-    attachment = serializers.CharField(required=False)
+    attachment = serializers.ListField(required=False, child=serializers.CharField())
     is_executed = serializers.BooleanField(default=False)
     auth_url = serializers.CharField(required=False)
     uid = serializers.CharField(required=False)

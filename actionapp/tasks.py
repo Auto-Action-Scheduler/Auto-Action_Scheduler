@@ -49,11 +49,12 @@ def perform_task(pk):
                 if 'attachment' in action:
                     email = EmailMessage(subject=action['subject'], body=action['description'],
                                          from_email=action['email'], to=action['receiver_mail'])
-                    file = 'media/' + action['attachment']
-                    with open(file, 'rb') as f:
-                        file_data = f.read()
-                        file_name = f.name.strip('media').strip('/attachment/')
-                    email.attach(file_name, file_data)
+                    for i in action['attachment']:
+                        file = 'media/' + i
+                        with open(file, 'rb') as f:
+                            file_data = f.read()
+                            file_name = f.name.strip('media').strip('/attachment/')
+                        email.attach(file_name, file_data)
                     email.send()
                 elif not 'attachment' in action:
                     send_mail(subject=action['subject'], message=action['description'], from_email=action['email'],
